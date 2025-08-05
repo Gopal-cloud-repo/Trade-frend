@@ -1,0 +1,77 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: trading-platform
+  
+  datasource:
+    url: jdbc:mysql://localhost:3306/trading_platform?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+  
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+  
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000
+
+# Angel One API Configuration
+angelone:
+  api:
+    base-url: https://apiconnect.angelbroking.com
+    client-id: ${ANGEL_ONE_CLIENT_ID:your_client_id}
+    client-secret: ${ANGEL_ONE_CLIENT_SECRET:your_client_secret}
+    websocket-url: wss://smartapisocket.angelone.in/smart-stream
+    timeout: 30000
+    retry-attempts: 3
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:mySecretKey123456789012345678901234567890}
+  expiration: 86400000 # 24 hours
+
+# Trading Configuration
+trading:
+  risk-management:
+    max-position-size: 100000
+    max-daily-loss: 50000
+    default-stop-loss: 2.0
+    default-take-profit: 4.0
+  
+  strategy:
+    execution-interval: 5000 # 5 seconds
+    backtest-days: 30
+
+# Logging
+logging:
+  level:
+    com.angelone.trading: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/trading-platform.log
