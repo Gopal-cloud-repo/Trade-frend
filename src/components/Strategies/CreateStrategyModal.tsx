@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, TrendingUp } from 'lucide-react';
 import { useTrading } from '../../context/TradingContext';
-import { Strategy } from '../../types/trading';
+import { apiService } from '../../services/api';
 
 interface CreateStrategyModalProps {
   onClose: () => void;
@@ -9,9 +9,11 @@ interface CreateStrategyModalProps {
 
 const CreateStrategyModal: React.FC<CreateStrategyModalProps> = ({ onClose }) => {
   const { dispatch } = useTrading();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
-    type: 'EMA_CROSSOVER' as Strategy['type'],
+    type: 'EMA_CROSSOVER',
     timeFrame: '15m',
     ema1: 20,
     ema2: 50,
@@ -21,34 +23,32 @@ const CreateStrategyModal: React.FC<CreateStrategyModalProps> = ({ onClose }) =>
     maxCapital: 10,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError('');
     
-    const newStrategy: Strategy = {
-      id: Date.now().toString(),
-      name: formData.name,
-      type: formData.type,
-      isActive: false,
-      parameters: {
+    try {
+      const strategyData = {
+        name: formData.name,
+        type: formData.type,
         timeFrame: formData.timeFrame,
-        indicators: formData.type === 'EMA_CROSSOVER' 
-          ? { ema1: formData.ema1, ema2: formData.ema2 }
-          : { rsiPeriod: formData.rsiPeriod },
-        riskManagement: {
-          stopLoss: formData.stopLoss,
-          takeProfit: formData.takeProfit,
-          maxCapital: formData.maxCapital,
-        },
-      },
-      performance: {
-        totalTrades: 0,
-        winRate: 0,
-        avgPnL: 0,
-      },
-    };
+        emaFast: formData.emaFast,
+        emaSlow: formData.emaSlow,
+        rsiPeriod: formData.rsiPeriod,
+        stopLossPercentage: formData.stopLoss,
+        takeProfitPercentage: formData.takeProfit,
+        maxCapitalPercentage: formData.maxCapital,
+      };
 
-    dispatch({ type: 'ADD_STRATEGY', payload: newStrategy });
-    onClose();
+      const newStrategy = await apiService.createStrategy(strategyData);
+      dispatch({ type: 'ADD_STRATEGY', payload: newStrategy });
+      onClose();
+    } catch (error: any) {
+      setError(error.message || 'Failed to create strategy');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -68,6 +68,12 @@ const CreateStrategyModal: React.FC<CreateStrategyModalProps> = ({ onClose }) =>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="bg-red-500/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Strategy Name
@@ -88,7 +94,7 @@ const CreateStrategyModal: React.FC<CreateStrategyModalProps> = ({ onClose }) =>
             </label>
             <select
               value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as Strategy['type'] })}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="EMA_CROSSOVER">EMA Crossover</option>
@@ -186,15 +192,17 @@ const CreateStrategyModal: React.FC<CreateStrategyModalProps> = ({ onClose }) =>
             <button
               type="button"
               onClick={onClose}
+              disabled={isLoading}
               className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
+              disabled={isLoading}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Create Strategy
+              {isLoading ? 'Creating...' : 'Create Strategy'}
             </button>
           </div>
         </form>

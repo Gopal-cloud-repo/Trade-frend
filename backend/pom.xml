@@ -92,6 +92,13 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
         
+        <!-- Angel One Smart API SDK -->
+        <dependency>
+            <groupId>com.angelbroking.smartapi</groupId>
+            <artifactId>smartapi-java</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        
         <!-- Scheduling -->
         <dependency>
             <groupId>org.springframework</groupId>

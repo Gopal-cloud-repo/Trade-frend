@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { TradingProvider, useTrading } from './context/TradingContext';
+import { apiService } from './services/api';
+import { webSocketService } from './services/websocket';
 import LoginForm from './components/Auth/LoginForm';
 import Navbar from './components/Layout/Navbar';
 import Dashboard from './components/Dashboard/Dashboard';
@@ -7,39 +9,61 @@ import StrategyManagement from './components/Strategies/StrategyManagement';
 import TradeExecution from './components/Trades/TradeExecution';
 import TransactionHistory from './components/History/TransactionHistory';
 import NotificationCenter from './components/Notifications/NotificationCenter';
-import { mockTrades, mockStrategies, mockMarketData, mockNotifications } from './data/mockData';
 
 const AppContent: React.FC = () => {
   const { state, dispatch } = useTrading();
   const [currentPage, setCurrentPage] = useState('dashboard');
 
   useEffect(() => {
-    // Initialize mock data when authenticated
+    // Load real data when authenticated
     if (state.isAuthenticated) {
-      mockTrades.forEach(trade => dispatch({ type: 'ADD_TRADE', payload: trade }));
-      mockStrategies.forEach(strategy => dispatch({ type: 'ADD_STRATEGY', payload: strategy }));
-      dispatch({ type: 'SET_MARKET_DATA', payload: mockMarketData });
-      mockNotifications.forEach(notification => dispatch({ type: 'ADD_NOTIFICATION', payload: notification }));
+      loadInitialData();
     }
   }, [state.isAuthenticated, dispatch]);
 
+  const loadInitialData = async () => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      
+      // Load trades
+      const trades = await apiService.getTrades();
+      trades.forEach((trade: any) => dispatch({ type: 'ADD_TRADE', payload: trade }));
+      
+      // Load strategies
+      const strategies = await apiService.getStrategies();
+      strategies.forEach((strategy: any) => dispatch({ type: 'ADD_STRATEGY', payload: strategy }));
+      
+      // Load notifications
+      const notifications = await apiService.getNotifications();
+      notifications.forEach((notification: any) => dispatch({ type: 'ADD_NOTIFICATION', payload: notification }));
+      
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  };
+
   // Simulate real-time market data updates
   useEffect(() => {
-    if (!state.isAuthenticated) return;
+    // Real-time updates are now handled via WebSocket in LoginForm
+    // This effect is kept for any additional real-time logic if needed
+    return () => {
+      // Cleanup WebSocket connections on unmount
+      webSocketService.disconnect();
+    };
+  }, []);
 
-    const interval = setInterval(() => {
-      const updatedMarketData = mockMarketData.map(data => ({
-        ...data,
-        price: data.price + (Math.random() - 0.5) * 20,
-        change: (Math.random() - 0.5) * 50,
-        changePercent: (Math.random() - 0.5) * 2,
-        timestamp: new Date(),
-      }));
-      dispatch({ type: 'SET_MARKET_DATA', payload: updatedMarketData });
-    }, 5000);
+  const handleLogout = () => {
+    apiService.logout();
+    webSocketService.disconnect();
+    dispatch({ type: 'LOGOUT' });
+  };
 
-    return () => clearInterval(interval);
-  }, [state.isAuthenticated, dispatch]);
+  // Add logout handler to context
+  useEffect(() => {
+    (window as any).handleLogout = handleLogout;
+  }, []);
 
   if (!state.isAuthenticated) {
     return <LoginForm />;

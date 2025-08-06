@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { apiService } from '../services/api';
+import { webSocketService } from '../services/websocket';
 import { User, Trade, Strategy, MarketData, Notification } from '../types/trading';
 
 interface TradingState {
@@ -19,6 +21,7 @@ type TradingAction =
   | { type: 'ADD_STRATEGY'; payload: Strategy }
   | { type: 'UPDATE_STRATEGY'; payload: { id: string; updates: Partial<Strategy> } }
   | { type: 'SET_MARKET_DATA'; payload: MarketData[] }
+  | { type: 'UPDATE_MARKET_DATA'; payload: MarketData }
   | { type: 'ADD_NOTIFICATION'; payload: Notification }
   | { type: 'MARK_NOTIFICATION_READ'; payload: string }
   | { type: 'SET_LOADING'; payload: boolean };
@@ -59,6 +62,15 @@ const tradingReducer = (state: TradingState, action: TradingAction): TradingStat
       };
     case 'SET_MARKET_DATA':
       return { ...state, marketData: action.payload };
+    case 'UPDATE_MARKET_DATA':
+      return {
+        ...state,
+        marketData: state.marketData.map(data =>
+          data.symbol === action.payload.symbol ? action.payload : data
+        ).concat(
+          state.marketData.find(data => data.symbol === action.payload.symbol) ? [] : [action.payload]
+        ),
+      };
     case 'ADD_NOTIFICATION':
       return { ...state, notifications: [action.payload, ...state.notifications] };
     case 'MARK_NOTIFICATION_READ':

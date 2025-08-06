@@ -6,6 +6,7 @@ import com.angelone.trading.dto.RegisterRequest;
 import com.angelone.trading.entity.User;
 import com.angelone.trading.repository.UserRepository;
 import com.angelone.trading.security.JwtTokenHelper;
+import com.angelone.trading.service.AngelOneApiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -27,6 +28,7 @@ public class AuthController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenHelper jwtTokenHelper;
+    private final AngelOneApiService angelOneApiService;
     
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
@@ -39,6 +41,9 @@ public class AuthController {
         
         User user = (User) authentication.getPrincipal();
         String token = jwtTokenHelper.generateToken(user);
+        
+        // Try to authenticate with Angel One API
+        angelOneApiService.authenticateUser(user);
         
         LoginResponse response = new LoginResponse();
         response.setToken(token);

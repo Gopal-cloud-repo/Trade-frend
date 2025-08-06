@@ -1,24 +1,47 @@
 import React, { useState } from 'react';
 import { TrendingUp, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useTrading } from '../../context/TradingContext';
-import { mockUser } from '../../data/mockData';
+import { apiService } from '../../services/api';
+import { webSocketService } from '../../services/websocket';
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('trader@example.com');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const { dispatch } = useTrading();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
 
-    // Simulate API call
-    setTimeout(() => {
-      dispatch({ type: 'SET_USER', payload: mockUser });
+    try {
+      const response = await apiService.login(email, password);
+      dispatch({ type: 'SET_USER', payload: response.user });
+      
+      // Connect to WebSocket
+      await webSocketService.connect(response.token);
+      
+      // Subscribe to real-time updates
+      webSocketService.subscribeToAllMarketData((data) => {
+        dispatch({ type: 'UPDATE_MARKET_DATA', payload: data });
+      });
+      
+      webSocketService.subscribeToTrades((data) => {
+        dispatch({ type: 'UPDATE_TRADE', payload: { id: data.id, updates: data } });
+      });
+      
+      webSocketService.subscribeToNotifications((data) => {
+        dispatch({ type: 'ADD_NOTIFICATION', payload: data });
+      });
+      
       setIsLoading(false);
-    }, 1000);
+    } catch (error: any) {
+      setError(error.message || 'Login failed');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -35,6 +58,12 @@ const LoginForm: React.FC = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-red-500/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">

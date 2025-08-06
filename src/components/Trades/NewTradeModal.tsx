@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, TrendingUp, TrendingDown } from 'lucide-react';
 import { useTrading } from '../../context/TradingContext';
-import { Trade } from '../../types/trading';
+import { apiService } from '../../services/api';
 
 interface NewTradeModalProps {
   onClose: () => void;
@@ -9,6 +9,8 @@ interface NewTradeModalProps {
 
 const NewTradeModal: React.FC<NewTradeModalProps> = ({ onClose }) => {
   const { dispatch } = useTrading();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     symbol: '',
     type: 'BUY' as 'BUY' | 'SELL',
@@ -18,24 +20,29 @@ const NewTradeModal: React.FC<NewTradeModalProps> = ({ onClose }) => {
     takeProfit: 0,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError('');
     
-    const newTrade: Trade = {
-      id: Date.now().toString(),
-      symbol: formData.symbol,
-      type: formData.type,
-      quantity: formData.quantity,
-      price: formData.price,
-      executedAt: new Date(),
-      status: 'OPEN',
-      stopLoss: formData.stopLoss || undefined,
-      takeProfit: formData.takeProfit || undefined,
-      pnl: 0,
-    };
+    try {
+      const tradeData = {
+        symbol: formData.symbol,
+        type: formData.type,
+        quantity: formData.quantity,
+        price: formData.price,
+        stopLoss: formData.stopLoss || null,
+        takeProfit: formData.takeProfit || null,
+      };
 
-    dispatch({ type: 'ADD_TRADE', payload: newTrade });
-    onClose();
+      const newTrade = await apiService.executeTrade(tradeData);
+      dispatch({ type: 'ADD_TRADE', payload: newTrade });
+      onClose();
+    } catch (error: any) {
+      setError(error.message || 'Failed to execute trade');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -52,6 +59,12 @@ const NewTradeModal: React.FC<NewTradeModalProps> = ({ onClose }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="bg-red-500/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Symbol
@@ -164,19 +177,21 @@ const NewTradeModal: React.FC<NewTradeModalProps> = ({ onClose }) => {
             <button
               type="button"
               onClick={onClose}
+              disabled={isLoading}
               className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
+              disabled={isLoading}
               className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
                 formData.type === 'BUY'
                   ? 'bg-green-600 hover:bg-green-700 text-white'
                   : 'bg-red-600 hover:bg-red-700 text-white'
-              }`}
+              } disabled:opacity-50`}
             >
-              Execute {formData.type}
+              {isLoading ? 'Executing...' : `Execute ${formData.type}`}
             </button>
           </div>
         </form>
