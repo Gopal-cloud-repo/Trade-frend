@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -23,6 +24,10 @@ public class MarketDataService {
     private final MarketDataRepository marketDataRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final TechnicalAnalysisService technicalAnalysisService;
+    private final AngelOneApiService angelOneApiService;
+    
+    @Autowired(required = false)
+    private AngelOneWebSocketService angelOneWebSocketService;
     
     private final Random random = new Random();
     private final List<String> symbols = Arrays.asList("NIFTY", "BANKNIFTY", "SENSEX", "RELIANCE", "TCS", "INFY");
@@ -30,8 +35,14 @@ public class MarketDataService {
     @Scheduled(fixedRate = 5000) // Every 5 seconds
     public void generateAndBroadcastMarketData() {
         try {
+            // If Angel One WebSocket is connected, it will handle real-time data
+            if (angelOneWebSocketService != null && angelOneWebSocketService.isConnected()) {
+                return;
+            }
+            
+            // Fallback to REST API calls or simulation
             for (String symbol : symbols) {
-                MarketData marketData = generateMarketData(symbol);
+                MarketData marketData = fetchOrGenerateMarketData(symbol);
                 marketDataRepository.save(marketData);
                 
                 // Broadcast to WebSocket subscribers
@@ -44,7 +55,46 @@ public class MarketDataService {
         }
     }
     
-    private MarketData generateMarketData(String symbol) {
+    private MarketData fetchOrGenerateMarketData(String symbol) {
+        // Try to fetch real data from Angel One API first
+        try {
+            Map<String, Object> apiData = angelOneApiService.getMarketData(symbol);
+            if (apiData != null && apiData.containsKey("ltp")) {
+                return convertApiDataToMarketData(symbol, apiData);
+            }
+        } catch (Exception e) {
+            log.debug("Failed to fetch real data for {}, using simulation: {}", symbol, e.getMessage());
+        }
+        
+        // Fallback to simulation
+        return generateMarketData(symbol);
+    }
+    
+    private MarketData convertApiDataToMarketData(String symbol, Map<String, Object> apiData) {
+        MarketData marketData = new MarketData();
+        marketData.setSymbol(symbol);
+        marketData.setOpen((BigDecimal) apiData.get("open"));
+        marketData.setHigh((BigDecimal) apiData.get("high"));
+        marketData.setLow((BigDecimal) apiData.get("low"));
+        marketData.setClose((BigDecimal) apiData.get("ltp"));
+        marketData.setVolume((Long) apiData.get("volume"));
+        marketData.setTimeFrame("1m");
+        marketData.setTimestamp(LocalDateTime.now());
+        
+        // Calculate change
+        BigDecimal change = marketData.getClose().subtract(marketData.getOpen());
+        marketData.setChange(change);
+        
+        if (marketData.getOpen().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal changePercent = change.divide(marketData.getOpen(), 4, BigDecimal.ROUND_HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+            marketData.setChangePercent(changePercent);
+        }
+        
+        return marketData;
+    }
+    
+    public MarketData generateMarketData(String symbol) {
         // Get the last price for this symbol
         MarketData lastData = marketDataRepository
                 .findTopBySymbolAndTimeFrameOrderByTimestampDesc(symbol, "1m")
@@ -102,6 +152,29 @@ public class MarketDataService {
         }
         
         return marketData;
+    }
+    
+    public void initializeAngelOneWebSocket(String authToken, String clientId) {
+        if (angelOneWebSocketService != null) {
+            angelOneWebSocketService.connect(authToken, clientId);
+            
+            // Subscribe to default symbols
+            for (String symbol : symbols) {
+                String token = getSymbolToken(symbol);
+                angelOneWebSocketService.subscribeToSymbol(symbol, token);
+            }
+        }
+    }
+    
+    private String getSymbolToken(String symbol) {
+        Map<String, String> symbolTokenMap = new HashMap<>();
+        symbolTokenMap.put("NIFTY", "99926000");
+        symbolTokenMap.put("BANKNIFTY", "99926009");
+        symbolTokenMap.put("RELIANCE", "2885");
+        symbolTokenMap.put("TCS", "11536");
+        symbolTokenMap.put("INFY", "1594");
+        
+        return symbolTokenMap.getOrDefault(symbol, "0");
     }
     
     private BigDecimal getBasePrice(String symbol) {

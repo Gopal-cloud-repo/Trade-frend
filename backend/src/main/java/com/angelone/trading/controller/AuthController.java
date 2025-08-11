@@ -29,6 +29,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenHelper jwtTokenHelper;
     private final AngelOneApiService angelOneApiService;
+    private final MarketDataService marketDataService;
     
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
@@ -44,6 +45,11 @@ public class AuthController {
         
         // Try to authenticate with Angel One API
         angelOneApiService.authenticateUser(user);
+        
+        // Initialize WebSocket connection for real-time data
+        if (user.getAngelOneToken() != null) {
+            marketDataService.initializeAngelOneWebSocket(user.getAngelOneToken(), user.getAngelOneClientId());
+        }
         
         LoginResponse response = new LoginResponse();
         response.setToken(token);
